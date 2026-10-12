@@ -19,7 +19,7 @@ Green tests are not evidence, so everything gets exercised against the running s
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/skyline-dark.svg">
-  <img alt="622 commits and 582 Claude Code sessions between 3 August and 12 October 2026, drawn as a city with one tower per day. Height is commits, shade is Claude Code messages. The busiest day was Monday 5 October: 146 commits and 6,900 messages." src="assets/skyline-light.svg" width="100%">
+  <img alt="625 commits and 582 Claude Code sessions between 3 August and 12 October 2026, drawn as a city with one tower per day. Height is commits, shade is Claude Code messages. The busiest day was Monday 5 October: 146 commits and 6,900 messages." src="assets/skyline-light.svg" width="100%">
 </picture>
 
 <sub>Counted on my Mac by [scripts/activity.py](scripts/activity.py) from git history and Claude Code logs, then drawn by [scripts/render.py](scripts/render.py). Counts only: no code, messages or prompts leave the machine.</sub>
