@@ -13,7 +13,8 @@ from render import ROOT, THEMES, esc, faces, svg_doc, n  # noqa: E402
 
 SHAPES = json.loads((ROOT / "data/work-shapes.json").read_text())
 STRIDE = 2  # 486 dots -> 243
-SCENE, MORPH = 7.0, 1.3  # seconds per topic, seconds a morph takes
+SCENE, MORPH = 3.4, 0.9  # seconds per topic, seconds a morph takes
+EASE = "0.65 0 0.35 1"
 TOPICS = [
     ("Web and app", "design", "#ff4fd8", ("browser", "phone"), ("Laying out the page", "Fitting it to a phone"),
      "Websites and app interfaces for the web, desktop and phones, from the first layout to the motion."),
@@ -29,9 +30,9 @@ TOPICS = [
      "Medical science and finance at the University of Sydney, and a published paper on 4-iodopyrimidine."),
 ]
 LAYOUTS = {
-    "wide": dict(W=1000, H=560, cx=715, cy=292, R=200, x=64, kick=64, prompt=168, t1=236, t2=292, tsz=50, label=346,
-                 ov=384, ovsz=15.5, ovw=420, lead=25, ticks=506, tickw=58, url_x=936),
-    "tall": dict(W=480, H=730, cx=240, cy=232, R=138, x=36, kick=46, prompt=432, t1=484, t2=524, tsz=36, label=566,
+    "wide": dict(W=1000, H=560, cx=738, cy=288, R=232, x=64, kick=64, prompt=156, t1=236, t2=300, tsz=56, label=356,
+                 ov=392, ovsz=15.5, ovw=420, lead=25, ticks=506, tickw=58, url_x=936),
+    "tall": dict(W=480, H=730, cx=240, cy=228, R=156, x=36, kick=46, prompt=432, t1=484, t2=524, tsz=36, label=566,
                  ov=596, ovsz=14, ovw=408, lead=21, ticks=696, tickw=54, url_x=444),
 }
 
@@ -98,7 +99,7 @@ def build(theme, layout, animated=True):
         prev, last_t = base, 0.0
         for e, sid in enumerate(order):
             p = SHAPES[sid][i]
-            t0 = (e // 2) * SCENE + (e % 2) * (SCENE * 0.34)
+            t0 = (e // 2) * SCENE + (e % 2) * (SCENE * 0.5)
             start = t0 + p[5] * 0.45 * MORPH
             end = start + 0.55 * MORPH
             if start > last_t + 1e-3:
@@ -111,39 +112,50 @@ def build(theme, layout, animated=True):
             times[-1] = 1.0
         ks = ";".join(kt(v) for v in times)
         a = lambda attr, vals: f'<animate attributeName="{attr}" values="{";".join(vals)}" keyTimes="{ks}" dur="{total:g}s" repeatCount="indefinite"/>'
-        dots.append(f'<circle cx="{cxs[0]}" cy="{cys[0]}" r="{rs[0]}">{a("cx", cxs)}{a("cy", cys)}{a("r", rs)}</circle>')
+        sp = f'calcMode="spline" keySplines="{";".join([EASE] * (len(times) - 1))}" '
+        ae = lambda attr, vals: f'<animate attributeName="{attr}" {sp}values="{";".join(vals)}" keyTimes="{ks}" dur="{total:g}s" repeatCount="indefinite"/>'
+        dots.append(f'<circle cx="{cxs[0]}" cy="{cys[0]}" r="{rs[0]}">{ae("cx", cxs)}{ae("cy", cys)}{a("r", rs)}</circle>')
     if animated:
         # the hue changes as each scene's first shape arrives
         hk = "0;" + ";".join(kt((j * SCENE + 0.55) / total) for j in range(1, len(hue))) + ";1"
         vals = ";".join(hue) + ";" + hue[-1]
-        out.append(f'<g fill="{hue[0]}" fill-opacity="{0.9 if dark else 0.85}"><animate attributeName="fill" calcMode="discrete" values="{vals}" keyTimes="{hk}" dur="{total:g}s" repeatCount="indefinite"/>' + "".join(dots) + "</g>")
+        fillanim = f'<animate attributeName="fill" calcMode="discrete" values="{vals}" keyTimes="{hk}" dur="{total:g}s" repeatCount="indefinite"/>'
+        out.append(f'<defs><filter id="g" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="{L["R"] / 30:.1f}"/></filter><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="{L["R"] / 3.2:.0f}"/></filter></defs>')
+        out.append(f'<circle cx="{L["cx"]}" cy="{L["cy"]}" r="{L["R"] * 1.05:.0f}" fill="{hue[0]}" opacity="{0.2 if dark else 0.13}" filter="url(#b)">{fillanim}</circle>')
+        out.append(f'<g id="c" fill="{hue[0]}" fill-opacity="{0.95 if dark else 0.9}">{fillanim}' + "".join(dots) + "</g>")
+        if dark:
+            out.append(f'<use href="#c" filter="url(#g)" opacity=".7"/>')
     else:
         out.append(f'<g fill="{hue[0]}" fill-opacity="{0.9 if dark else 0.85}">{"".join(dots)}</g>')
 
     # per-scene text; each group fades in and out on its own clock
-    def group(inner, t_in, t_out, j, static_show=False):
+    def group(inner, t_in, t_out, j, static_show=False, lift=False):
         if not animated:
             return inner if static_show else ""
         a, b = j * SCENE + t_in, j * SCENE + t_out
-        pts = [(0, 0), (a, 0), (a + 0.5, 1), (b, 1), (b + 0.4, 0)]
+        pts = [(0, 0), (a, 0), (a + 0.28, 1), (b, 1), (b + 0.14, 0)]
         pts = [(min(total, tt) / total, v) for tt, v in pts] + [(1, 0)]
         ks = ";".join(kt(p[0]) for p in pts)
         vs = ";".join(str(p[1]) for p in pts)
-        return f'<g opacity="0"><animate attributeName="opacity" values="{vs}" keyTimes="{ks}" dur="{total:g}s" repeatCount="indefinite"/>{inner}</g>'
+        mv = ""
+        if lift:  # the title rises into place
+            tv = ";".join(["0 22" if v == 0 else "0 0" for _, v in pts])
+            mv = f'<animateTransform attributeName="transform" type="translate" values="{tv}" keyTimes="{ks}" dur="{total:g}s" repeatCount="indefinite"/>'
+        return f'<g opacity="0"><animate attributeName="opacity" values="{vs}" keyTimes="{ks}" dur="{total:g}s" repeatCount="indefinite"/>{mv}{inner}</g>'
 
     for j, (a, b, _, _, labels, ov) in enumerate(TOPICS):
         col = hue[j]
         title = (f'<text class="t" x="{L["x"]}" y="{L["t1"]}" font-size="{L["tsz"]}">{s6.use(a)}</text>'
                  f'<text class="t" x="{L["x"]}" y="{L["t2"]}" font-size="{L["tsz"]}">{s6.use(b)}</text>')
-        out.append(group(title, 0.2, SCENE - 0.3, j, static_show=(j == 0)))
+        out.append(group(title, 0.05, SCENE - 0.12, j, static_show=(j == 0), lift=True))
         for q, lab in enumerate(labels):
-            t_a = 0.45 + q * 2.35
+            t_a = 0.15 + q * 1.6
             inner = (f'<circle cx="{L["x"] + 4}" cy="{L["label"] - 4}" r="3" fill="{col}"/>'
                      f'<text class="l" x="{L["x"] + 18}" y="{L["label"]}" font-size="13" fill="{col}">{esc(m4.use(lab))}…</text>')
-            out.append(group(inner, t_a, t_a + 2.2, j))
+            out.append(group(inner, t_a, t_a + 1.5, j))
         lines = wrap(s4, ov, L["ovsz"], L["ovw"])
         inner = "".join(f'<text class="p" x="{L["x"]}" y="{L["ov"] + i * L["lead"]}" font-size="{L["ovsz"]}">{s4.use(esc(ln))}</text>' for i, ln in enumerate(lines))
-        out.append(group(inner, 4.7, SCENE - 0.3, j, static_show=(j == 0)))
+        out.append(group(inner, 1.0, SCENE - 0.12, j, static_show=(j == 0)))
     if not animated:
         lab = TOPICS[0][4][1]
         out.append(f'<circle cx="{L["x"] + 4}" cy="{L["label"] - 4}" r="3" fill="{hue[0]}"/>')
